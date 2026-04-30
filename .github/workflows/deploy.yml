@@ -1,0 +1,48 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ⬇️⬇️⬇️ НОВЫЙ ШАГ С ТЕСТАМИ ⬇️⬇️⬇️
+      - name: Run tests
+        run: npm test
+      # ⬆️⬆️⬆️ ВАЖНО: если тесты не пройдут - пайплайн остановится ⬆️⬆️⬆️
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Docker image
+        run: |
+          docker build -f Dockerfile.multistage -t my-nest-app:${{ github.sha }} .
+          docker tag my-nest-app:${{ github.sha }} my-nest-app:latest
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push my-nest-app:${{ github.sha }}
+          docker push my-nest-app:latest
